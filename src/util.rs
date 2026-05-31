@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::time::Duration;
 
 use aws_lc_rs::digest;
@@ -21,6 +22,10 @@ pub fn string_to_hash(str: String) -> String {
 }
 
 pub fn create_http_client(timeout: Duration, proxy: Option<Proxy>) -> reqwest::Client {
+    create_http_client_bind(timeout, proxy, None)
+}
+
+pub fn create_http_client_bind(timeout: Duration, proxy: Option<Proxy>, local_addr: Option<IpAddr>) -> reqwest::Client {
     let root_store = RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
     let mut tls = ClientConfig::builder_with_provider(ssl_provider().into())
         .with_safe_default_protocol_versions()
@@ -47,6 +52,10 @@ pub fn create_http_client(timeout: Duration, proxy: Option<Proxy>) -> reqwest::C
         builder = builder.proxy(proxy);
     } else {
         builder = builder.no_proxy();
+    }
+
+    if let Some(addr) = local_addr {
+        builder = builder.local_address(addr);
     }
 
     builder.build().unwrap()

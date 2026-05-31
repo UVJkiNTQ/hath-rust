@@ -1,5 +1,5 @@
 use std::{
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -61,6 +61,7 @@ pub struct Server {
 
 pub struct ServerOptions {
     port: u16,
+    bind_addr: IpAddr,
     cert: ParsedCert,
     data: AppState,
     flood_control: bool,
@@ -74,6 +75,7 @@ impl ServerOptions {
     pub fn new(port: u16, cert: ParsedCert, data: AppState) -> Self {
         Self {
             port,
+            bind_addr: IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
             cert,
             data,
             flood_control: true,
@@ -82,6 +84,11 @@ impl ServerOptions {
             server_header: true,
             h3: false,
         }
+    }
+
+    pub fn bind_addr(mut self, addr: IpAddr) -> Self {
+        self.bind_addr = addr;
+        self
     }
 
     pub fn flood_control(mut self, enabled: bool) -> Self {
@@ -120,7 +127,7 @@ impl Server {
         let handle = Arc::new(ServerHandle::new(cert_store.clone()));
 
         let acceptor = TlsAcceptor::from(Arc::new(create_ssl_config(provider.clone(), cert_store.clone())));
-        let listener = bind(SocketAddr::from(([0, 0, 0, 0], port)));
+        let listener = bind(SocketAddr::new(option.bind_addr, port));
 
         let mut http = http1::Builder::new();
         http.keep_alive(false)
@@ -147,7 +154,7 @@ impl Server {
         let accept_task_h3 = if option.h3 {
             info!("Enable experimental HTTP3 support. Please ensure UDP port {port} is open.");
             let quinn_config = create_quic_config(provider, cert_store);
-            let endpoint = quinn::Endpoint::server(quinn_config, SocketAddr::from(([0, 0, 0, 0], port))).unwrap();
+            let endpoint = quinn::Endpoint::server(quinn_config, SocketAddr::new(option.bind_addr, port)).unwrap();
             Some(tokio::spawn(accept_loop_h3(handle.clone(), endpoint, router, flood_control)))
         } else {
             None

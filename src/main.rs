@@ -1,7 +1,7 @@
 #![windows_subsystem = "windows"]
 #[cfg(not(target_env = "msvc"))]
 use std::ffi::{CStr, c_char};
-use std::{collections::HashMap, error::Error, ops::RangeInclusive, path::Path, sync::Arc, time::Duration};
+use std::{collections::HashMap, error::Error, net::IpAddr, ops::RangeInclusive, path::Path, sync::Arc, time::Duration};
 
 use clap::Parser;
 use const_format::formatcp;
@@ -34,7 +34,7 @@ use crate::{
     metrics::Metrics,
     rpc::RPCClient,
     server::{Server, ServerOptions},
-    util::{create_dirs, create_http_client},
+    util::{create_dirs, create_http_client_bind},
 };
 
 mod cache_manager;
@@ -76,6 +76,10 @@ struct Args {
     /// Overrides the port set in the client's settings
     #[arg(short, long)]
     port: Option<u16>,
+
+    /// Bind address for the server (default: 0.0.0.0)
+    #[arg(short, long)]
+    bind: Option<IpAddr>,
 
     /// Cache data location
     #[arg(long, default_value_t = String::from("cache"))]
@@ -215,7 +219,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Some(i) => i,
         None => setup(&args.data_dir).await?,
     };
-    let client = Arc::new(RPCClient::new(id, &key, args.disable_ip_origin_check, args.max_connection, args.rpc_server_ip.as_deref()));
+    let client = Arc::new(RPCClient::with_bind(id, &key, args.disable_ip_origin_check, args.max_connection, args.rpc_server_ip.as_deref(), args.bind));
     let init_settings = match client.login().await {
         Ok(settings) => settings,
         Err(err) => {
@@ -264,7 +268,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let port = args.port.unwrap_or_else(|| init_settings.client_port());
     let cert = client.get_cert().await.expect("Failed to get server certificate");
     let state = AppState {
-        reqwest: create_http_client(Duration::from_secs(30), proxy.clone()),
+        reqwest: create_http_client_bind(Duration::from_secs(30), proxy.clone(), args.bind),
         rpc: client.clone(),
         download_state: Default::default(),
         cache_manager: cache_manager.clone(),
@@ -273,14 +277,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         metrics: metrics.clone(),
     };
     let flood_control = !(args.disable_flood_control || args.disable_ip_origin_check);
-    let server = Server::new(
-        ServerOptions::new(port, cert, state)
-            .flood_control(flood_control)
-            .metrics(args.enable_metrics)
-            .sni_strict(args.sni_strict)
-            .server_header(!args.disable_server_header)
-            .h3(args.enable_h3),
-    );
+    let mut server_opts = ServerOptions::new(port, cert, state)
+        .flood_control(flood_control)
+        .metrics(args.enable_metrics)
+        .sni_strict(args.sni_strict)
+        .server_header(!args.disable_server_header)
+        .h3(args.enable_h3);
+    if let Some(addr) = args.bind {
+        server_opts = server_opts.bind_addr(addr);
+    }
+    let server = Server::new(server_opts);
     let server_handle = server.handle();
 
     info!("Notifying the server that we have finished starting up the client...");
