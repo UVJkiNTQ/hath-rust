@@ -20,7 +20,7 @@ use crate::{
     AppState, Command, MAX_KEY_TIME_DRIFT,
     route::{forbidden, parse_additional, speed_test::random_response},
     server::ClientAddr,
-    util::{create_http_client, string_to_hash},
+    util::{create_http_client_bind, string_to_hash},
 };
 
 pub(super) async fn servercmd(
@@ -70,7 +70,7 @@ pub(super) async fn servercmd(
                 let random: u32 = fastrand::u32(..);
                 let url = Url::parse(&format!("{protocol}://{host}:{port}/t/{size}/{time}/{token}/{random}")).unwrap();
                 debug!("Speedtest thread start: {}", url);
-                let reqwest = create_http_client(Duration::from_secs(60), None); // No proxy http client
+                let reqwest = create_http_client_bind(Duration::from_secs(60), None, data.bind_addr); // No proxy http client
                 requests.push(tokio::spawn(async move {
                     for retry in 0..3 {
                         if retry > 0 {

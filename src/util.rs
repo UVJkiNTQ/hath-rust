@@ -21,10 +21,6 @@ pub fn string_to_hash(str: String) -> String {
     const_hex::encode(digest::digest(&digest::SHA1_FOR_LEGACY_USE_ONLY, str.as_bytes()))
 }
 
-pub fn create_http_client(timeout: Duration, proxy: Option<Proxy>) -> reqwest::Client {
-    create_http_client_bind(timeout, proxy, None)
-}
-
 pub fn create_http_client_bind(timeout: Duration, proxy: Option<Proxy>, local_addr: Option<IpAddr>) -> reqwest::Client {
     let root_store = RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
     let mut tls = ClientConfig::builder_with_provider(ssl_provider().into())

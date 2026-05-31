@@ -163,6 +163,7 @@ pub struct AppState {
     cache_manager: Arc<CacheManager>,
     command_channel: Sender<Command>,
     has_proxy: bool,
+    bind_addr: Option<IpAddr>,
     metrics: Arc<Metrics>,
 }
 
@@ -274,6 +275,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         cache_manager: cache_manager.clone(),
         command_channel: tx.clone(),
         has_proxy: proxy.is_some(),
+        bind_addr: args.bind,
         metrics: metrics.clone(),
     };
     let flood_control = !(args.disable_flood_control || args.disable_ip_origin_check);
@@ -353,7 +355,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Command::StartDownloader => {
                     let mut downloader = downloader2.lock();
                     if downloader.is_none() {
-                        let new = GalleryDownloader::new(client2.clone(), &args.download_dir, proxy.clone(), metrics2.clone());
+                        let new = GalleryDownloader::new(client2.clone(), &args.download_dir, proxy.clone(), args.bind, metrics2.clone());
                         let downloader3 = downloader2.clone();
                         *downloader = Some(tokio::spawn(async move {
                             new.run().await;

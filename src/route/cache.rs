@@ -37,7 +37,7 @@ use crate::{
     metrics::{LABEL_CACHE_DOWNLOAD, LABEL_CACHE_FETCH_URL},
     route::{forbidden, not_found, parse_additional},
     server::util::TruncateBody,
-    util::{create_http_client, string_to_hash},
+    util::{create_http_client_bind, string_to_hash},
 };
 
 const TTL: RangeInclusive<i64> = -900..=900; // Token TTL 15 minutes
@@ -226,7 +226,7 @@ pub(super) async fn hath(
 
                         // Disable proxy on connect error and third retry
                         if use_proxy && (err.is_connect() || retry == 1) {
-                            reqwest = create_http_client(Duration::from_secs(30), None);
+                            reqwest = create_http_client_bind(Duration::from_secs(30), None, data.bind_addr);
                             use_proxy = false;
                         }
 
